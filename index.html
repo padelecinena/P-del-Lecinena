@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Pádel Leciñena</title>
+<link rel="icon" href="assets/hero.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<div id="cloud-status" class="cloud-status">
+  <div class="cloud-status-box" id="cloud-status-box">
+    <div class="spinner"></div>
+    <p>Conectando con la nube…</p>
+  </div>
+</div>
+
+<!-- ===================== LOGIN / REGISTRO ===================== -->
+<section id="view-login" class="view">
+  <div class="hero-frame">
+    <img class="hero-img" src="assets/hero.png" alt="Escudo de Leciñena, Zaragoza">
+    <div class="hero-fade"></div>
+  </div>
+
+  <div class="login-wrap">
+    <div class="brand">
+      <span class="brand-eyebrow">Leciñena</span>
+      <h1 class="brand-title">PÁDEL<br><span>LECIÑENA</span></h1>
+    </div>
+
+    <div class="card auth-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" id="tab-login" type="button">Entrar</button>
+        <button class="tab" id="tab-register" type="button">Crear cuenta</button>
+      </div>
+
+      <form id="form-login" class="stack" autocomplete="off">
+        <label class="field">
+          <span>Usuario</span>
+          <input type="text" id="login-user" placeholder="tu nombre" required>
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input type="password" id="login-pass" placeholder="••••" required inputmode="numeric">
+        </label>
+        <p class="field-error" id="login-error"></p>
+        <button type="submit" class="btn btn-primary btn-block">Entrar a la pista</button>
+        <p class="forgot-hint">¿Has olvidado la contraseña? Pídele al máster del club (Eduardo) que te la restablezca.</p>
+      </form>
+
+      <form id="form-register" class="stack hidden" autocomplete="off">
+        <label class="avatar-picker">
+          <input type="file" id="reg-photo" accept="image/*" hidden>
+          <div class="avatar-preview" id="reg-photo-preview">
+            <span>+</span>
+          </div>
+          <span class="avatar-label">Foto de perfil (opcional)</span>
+        </label>
+        <label class="field">
+          <span>Usuario</span>
+          <input type="text" id="reg-user" placeholder="elige un nombre" required>
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input type="password" id="reg-pass" placeholder="0000" required minlength="4" maxlength="8" inputmode="numeric" pattern="[0-9]*">
+          <span class="field-hint">Debe tener entre 4 y 8 números</span>
+        </label>
+        <p class="field-error" id="register-error"></p>
+        <button type="submit" class="btn btn-primary btn-block">Crear mi cuenta</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HOME ===================== -->
+<section id="view-home" class="view hidden">
+  <header class="topbar">
+    <div class="topbar-user" id="home-user-chip">
+      <img src="assets/hero.png" alt="" class="topbar-logo">
+      <label class="avatar-edit" title="Cambiar foto de perfil">
+        <input type="file" id="home-photo-input" accept="image/*" hidden>
+        <div class="avatar-sm" id="home-avatar"></div>
+        <span class="avatar-edit-badge">✎</span>
+      </label>
+      <div>
+        <p class="topbar-hello">Hola,</p>
+        <p class="topbar-name" id="home-username"></p>
+        <span class="master-badge hidden" id="home-master-badge">★ Máster</span>
+      </div>
+    </div>
+    <button class="icon-btn" id="btn-logout" title="Salir">Salir</button>
+  </header>
+
+  <main class="content">
+    <button class="btn btn-accent btn-block btn-request" id="btn-request-match">
+      <span class="btn-request-icon">＋</span> Pedir partido
+    </button>
+
+    <nav class="segment">
+      <button class="segment-btn active" id="seg-matches" type="button">Partidos</button>
+      <button class="segment-btn" id="seg-ranking" type="button">Ranking</button>
+      <button class="segment-btn hidden" id="seg-admin" type="button">🔑 Admin</button>
+    </nav>
+
+    <div id="panel-matches">
+      <h2 class="section-title">Buscando jugadores</h2>
+      <div id="matches-list" class="matches-list"></div>
+      <p class="empty-state" id="matches-empty">Todavía no hay partidos abiertos. ¡Pide uno!</p>
+
+      <hr class="divider">
+
+      <div class="results-header">
+        <h2 class="section-title small">Partidos terminados</h2>
+      </div>
+      <div id="recent-results" class="matches-list"></div>
+      <p class="empty-state" id="recent-results-empty">Aún no se ha jugado ningún partido.</p>
+      <button class="btn btn-outline btn-block" id="btn-open-history" type="button">Ver historial completo por jugador</button>
+    </div>
+
+    <div id="panel-ranking" class="hidden">
+      <h2 class="section-title">Ranking del club</h2>
+      <div class="ranking-table" id="ranking-table"></div>
+      <p class="empty-state hidden" id="ranking-empty">Aún no hay resultados registrados.</p>
+    </div>
+
+    <div id="panel-admin" class="hidden">
+      <h2 class="section-title">Restablecer contraseña</h2>
+      <div class="card admin-card">
+        <label class="field">
+          <span>Jugador</span>
+          <select id="admin-user-select"></select>
+        </label>
+        <label class="field">
+          <span>Contraseña nueva</span>
+          <input type="password" id="admin-new-pass" placeholder="0000" inputmode="numeric" pattern="[0-9]*" maxlength="8">
+          <span class="field-hint">Entre 4 y 8 números</span>
+        </label>
+        <p class="field-error" id="admin-error"></p>
+        <button class="btn btn-primary btn-block" id="btn-admin-reset">Restablecer contraseña</button>
+      </div>
+
+      <h2 class="section-title small danger-title">Zona de peligro</h2>
+      <div class="card admin-card danger-card">
+        <div class="danger-row">
+          <div>
+            <p class="danger-row-title">Eliminar cuenta de jugador</p>
+            <p class="danger-row-sub">Libera el nombre de usuario para poder registrarlo de nuevo (usa el selector de arriba).</p>
+          </div>
+          <button class="btn btn-danger" id="btn-admin-delete-user">Eliminar cuenta</button>
+        </div>
+        <hr class="divider" style="margin:16px 0;">
+        <div class="danger-row">
+          <div>
+            <p class="danger-row-title">Borrar historial de partidos</p>
+            <p class="danger-row-sub">Elimina TODOS los partidos (activos y terminados). El ranking no se toca.</p>
+          </div>
+          <button class="btn btn-danger" id="btn-wipe-matches">Borrar historial</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- ===================== PARTIDO ===================== -->
+<section id="view-match" class="view hidden">
+  <header class="topbar">
+    <button class="icon-btn" id="btn-back-match">← Volver</button>
+    <span class="topbar-title"><img src="assets/hero.png" alt="" class="topbar-logo">Partido</span>
+    <button class="icon-btn icon-btn-danger hidden" id="btn-delete-match" title="Borrar partido">🗑</button>
+  </header>
+
+  <main class="content">
+    <div class="match-hero">
+      <div class="hour-block">
+        <span class="hour-label">Día</span>
+        <input type="date" id="match-date" class="date-input" disabled>
+      </div>
+      <div class="hour-block">
+        <span class="hour-label">Hora</span>
+        <input type="time" id="match-hour" class="hour-input" disabled>
+      </div>
+      <p class="match-status-badge" id="match-status-badge"></p>
+    </div>
+
+    <div class="court" id="court"></div>
+
+    <a class="btn btn-whatsapp btn-block hidden" id="btn-share-whatsapp" target="_blank" rel="noopener">📲 Avisar al grupo por WhatsApp</a>
+
+    <div id="result-box" class="card result-box hidden">
+      <h3 class="section-title small" id="result-box-title">Registrar resultado</h3>
+      <p class="result-hint">Revisa quién ha jugado en cada equipo antes de guardar el resultado:</p>
+
+      <div class="team-picker">
+        <div class="team-picker-col">
+          <span class="team-picker-label">Equipo 1</span>
+          <select class="field-select" id="pick-team1-p1"></select>
+          <select class="field-select" id="pick-team1-p2"></select>
+        </div>
+        <div class="team-picker-col">
+          <span class="team-picker-label">Equipo 2</span>
+          <select class="field-select" id="pick-team2-p1"></select>
+          <select class="field-select" id="pick-team2-p2"></select>
+        </div>
+      </div>
+      <p class="field-error" id="teams-error"></p>
+
+      <p class="result-hint" style="margin-top:6px;">Resultado por sets (deja vacíos los que no se jugaron, máximo 5):</p>
+      <div class="sets-editor">
+        <div class="set-row"><span class="set-row-label">Set 1</span><input type="number" class="set-input" id="set-1-a" min="0" max="7" placeholder="-"><span class="set-row-sep">–</span><input type="number" class="set-input" id="set-1-b" min="0" max="7" placeholder="-"></div>
+        <div class="set-row"><span class="set-row-label">Set 2</span><input type="number" class="set-input" id="set-2-a" min="0" max="7" placeholder="-"><span class="set-row-sep">–</span><input type="number" class="set-input" id="set-2-b" min="0" max="7" placeholder="-"></div>
+        <div class="set-row"><span class="set-row-label">Set 3</span><input type="number" class="set-input" id="set-3-a" min="0" max="7" placeholder="-"><span class="set-row-sep">–</span><input type="number" class="set-input" id="set-3-b" min="0" max="7" placeholder="-"></div>
+        <div class="set-row"><span class="set-row-label">Set 4</span><input type="number" class="set-input" id="set-4-a" min="0" max="7" placeholder="-"><span class="set-row-sep">–</span><input type="number" class="set-input" id="set-4-b" min="0" max="7" placeholder="-"></div>
+        <div class="set-row"><span class="set-row-label">Set 5</span><input type="number" class="set-input" id="set-5-a" min="0" max="7" placeholder="-"><span class="set-row-sep">–</span><input type="number" class="set-input" id="set-5-b" min="0" max="7" placeholder="-"></div>
+      </div>
+      <p class="field-error" id="sets-error"></p>
+
+      <button class="btn btn-primary btn-block" id="btn-save-result">Guardar resultado</button>
+      <button class="btn btn-outline btn-block hidden" id="btn-cancel-edit-result" type="button">Cancelar</button>
+    </div>
+
+    <div id="result-summary" class="card result-summary hidden"></div>
+</main>
+</section>
+
+<!-- ===================== HISTORIAL ===================== -->
+<section id="view-history" class="view hidden">
+  <header class="topbar">
+    <button class="icon-btn" id="btn-back-history">← Volver</button>
+    <span class="topbar-title"><img src="assets/hero.png" alt="" class="topbar-logo">Historial</span>
+    <span style="width:52px"></span>
+  </header>
+
+  <main class="content">
+    <label class="field" style="margin-bottom:18px;">
+      <span>Filtrar por jugador</span>
+      <select id="history-filter"></select>
+    </label>
+    <div id="history-list" class="matches-list"></div>
+    <p class="empty-state hidden" id="history-empty">No hay partidos jugados con este filtro.</p>
+  </main>
+</section>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
