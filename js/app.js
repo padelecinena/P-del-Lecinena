@@ -578,10 +578,13 @@ document.getElementById('btn-back-match').addEventListener('click', () => {
   show('view-home');
 });
 
+function canDeleteMatch(user, match){
+  return !!user && !!match && (isMaster(user) || match.createdBy === user.username);
+}
+
 document.getElementById('btn-delete-match').addEventListener('click', () => {
-  if(!isMaster(currentUser())) return;
   const match = getMatch(activeMatchId);
-  if(!match) return;
+  if(!canDeleteMatch(currentUser(), match)) return;
   const ok = confirm(`¿Borrar el partido de las ${match.hour}? Esta acción no se puede deshacer.`);
   if(!ok) return;
   window.db.collection(COL_MATCHES).doc(match.id).delete()
@@ -641,7 +644,7 @@ function renderMatch(){
   const badge = document.getElementById('match-status-badge');
   badge.textContent = match.status === 'open' ? 'Buscando jugadores' : (match.status === 'full' ? 'Completo' : 'Partido jugado');
 
-  document.getElementById('btn-delete-match').classList.toggle('hidden', !isMaster(user));
+  document.getElementById('btn-delete-match').classList.toggle('hidden', !canDeleteMatch(user, match));
 
   const grid = document.getElementById('court');
   grid.innerHTML = '';
