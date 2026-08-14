@@ -568,7 +568,49 @@ function enterApp(){
   segMatches.click();
   show('view-home');
   loadWeather();
+  maybeShowResultReminder();
 }
+
+/* ===========================================================
+   AVISO DE RESULTADO PENDIENTE (6h tras la hora del partido)
+=========================================================== */
+const RESULT_REMINDER_MS = 6 * 60 * 60 * 1000;
+
+function matchDateTimeMs(m){
+  if(m.date && m.hour){
+    const dt = new Date(`${m.date}T${m.hour}:00`);
+    if(!isNaN(dt.getTime())) return dt.getTime();
+  }
+  return m.createdAt;
+}
+
+function findPendingResultMatch(){
+  const user = currentUser();
+  if(!user) return null;
+  const now = Date.now();
+  const pending = getMatches()
+    .filter(m => m.status === 'full' && m.createdBy === user.username)
+    .filter(m => now - matchDateTimeMs(m) >= RESULT_REMINDER_MS)
+    .sort((a, b) => matchDateTimeMs(a) - matchDateTimeMs(b));
+  return pending[0] || null;
+}
+
+function maybeShowResultReminder(){
+  const modal = document.getElementById('reminder-modal');
+  const match = findPendingResultMatch();
+  if(!match){ modal.classList.add('hidden'); return; }
+  const dateLabel = match.date ? formatISODate(match.date) : formatDate(match.createdAt);
+  document.getElementById('reminder-match-info').textContent = `Partido del ${dateLabel} a las ${match.hour}`;
+  document.getElementById('btn-reminder-go').onclick = () => {
+    modal.classList.add('hidden');
+    openMatch(match.id);
+  };
+  modal.classList.remove('hidden');
+}
+
+document.getElementById('btn-close-reminder').addEventListener('click', () => {
+  document.getElementById('reminder-modal').classList.add('hidden');
+});
 
 /* ===========================================================
    TIEMPO EN LECIÑENA (Open-Meteo, sin clave)
@@ -591,7 +633,7 @@ function weatherIconFor(code){
 function loadWeather(){
   if(weatherLoaded) return;
   weatherLoaded = true;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=2`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=2`;
   fetch(url)
     .then(r => r.json())
     .then(data => {
@@ -610,7 +652,7 @@ function fillWeatherDay(elId, daily, i){
   if(!el) return;
   const max = Math.round(daily.temperature_2m_max[i]);
   const min = Math.round(daily.temperature_2m_min[i]);
-  el.querySelector('.weather-icon').textContent = weatherIconFor(daily.weathercode[i]);
+  el.querySelector('.weather-icon').textContent = weatherIconFor(daily.weather_code[i]);
   el.querySelector('.weather-temp').textContent = `${max}° / ${min}°`;
 }
 
@@ -929,6 +971,7 @@ document.getElementById('btn-save-result').addEventListener('click', () => {
 
   resultEditorOpen = false;
   toast(isEdit ? 'Resultado corregido. ¡Ranking actualizado!' : 'Resultado guardado. ¡Ranking actualizado!');
+  setTimeout(maybeShowResultReminder, 400);
 });
 
 /* ===========================================================
