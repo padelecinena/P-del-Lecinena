@@ -567,6 +567,51 @@ document.getElementById('btn-wipe-matches').addEventListener('click', () => {
 function enterApp(){
   segMatches.click();
   show('view-home');
+  loadWeather();
+}
+
+/* ===========================================================
+   TIEMPO EN LECIÑENA (Open-Meteo, sin clave)
+=========================================================== */
+const WEATHER_LAT = 41.799;
+const WEATHER_LON = -0.611;
+let weatherLoaded = false;
+
+function weatherIconFor(code){
+  if(code === 0) return '☀️';
+  if(code === 1 || code === 2) return '🌤️';
+  if(code === 3) return '☁️';
+  if(code === 45 || code === 48) return '🌫️';
+  if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return '🌧️';
+  if([71,73,75,77,85,86].includes(code)) return '❄️';
+  if([95,96,99].includes(code)) return '⛈️';
+  return '🌡️';
+}
+
+function loadWeather(){
+  if(weatherLoaded) return;
+  weatherLoaded = true;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMadrid&forecast_days=2`;
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      if(!data.daily) throw new Error('sin datos');
+      fillWeatherDay('weather-today', data.daily, 0);
+      fillWeatherDay('weather-tomorrow', data.daily, 1);
+      document.getElementById('weather-widget').classList.remove('hidden');
+    })
+    .catch(() => {
+      weatherLoaded = false;
+    });
+}
+
+function fillWeatherDay(elId, daily, i){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const max = Math.round(daily.temperature_2m_max[i]);
+  const min = Math.round(daily.temperature_2m_min[i]);
+  el.querySelector('.weather-icon').textContent = weatherIconFor(daily.weathercode[i]);
+  el.querySelector('.weather-temp').textContent = `${max}° / ${min}°`;
 }
 
 /* ===========================================================
