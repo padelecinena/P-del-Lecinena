@@ -79,6 +79,29 @@ body::before{
 }
 @keyframes spin{ to{ transform: rotate(360deg); } }
 
+/* ---------------- modal genérico (avisos) ---------------- */
+.modal-overlay{
+  position:fixed; inset:0; background: rgba(22,19,15,0.72); z-index:900;
+  display:flex; align-items:center; justify-content:center; padding:24px;
+}
+.modal-card{
+  background: var(--paper); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding:28px 22px 24px; max-width:380px; width:100%; text-align:center; position:relative;
+}
+.modal-close{
+  position:absolute; top:12px; right:12px; background:none; border:none; font-size:16px;
+  color: var(--ink-soft); opacity:0.5; cursor:pointer; padding:6px;
+}
+.modal-close:hover{ opacity:0.9; }
+.modal-emoji{ font-size:32px; display:block; margin-bottom:8px; }
+.modal-title{ font-size:20px; text-transform:uppercase; margin-bottom:10px; }
+.modal-question{ font-size:14.5px; line-height:1.55; color: var(--ink-soft); margin-bottom:10px; }
+.reminder-card{ border-top:4px solid var(--crimson); }
+.modal-match{
+  background: var(--paper-dim); border-radius: var(--radius-sm); padding:10px 12px; margin-bottom:20px;
+  font-size:13px; font-weight:700; color: var(--ink);
+}
+
 /* ---------------- LOGIN ---------------- */
 #view-login{ display:flex; flex-direction:column; background:var(--ink); }
 .hero-frame{
