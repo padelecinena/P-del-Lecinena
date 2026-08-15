@@ -101,6 +101,26 @@ body::before{
   background: var(--paper-dim); border-radius: var(--radius-sm); padding:10px 12px; margin-bottom:20px;
   font-size:13px; font-weight:700; color: var(--ink);
 }
+.modal-actions{ display:flex; gap:12px; }
+.btn-choice{
+  flex:1; border:none; border-radius: var(--radius-sm); cursor:pointer; font-weight:800; font-size:15px;
+  padding:14px 10px; color:#fff;
+}
+.btn-choice-yes{ background: var(--crimson); }
+.btn-choice-yes:hover{ filter:brightness(1.08); }
+.btn-choice-no{ background: var(--pine); }
+.btn-choice-no:hover{ filter:brightness(1.08); }
+
+.welcome-card{ border-top:4px solid var(--ball); }
+.welcome-emojis{ font-size:28px; display:block; margin-bottom:8px; letter-spacing:6px; }
+.welcome-title{
+  font-size:12px; letter-spacing:0.12em; color: var(--pine); text-transform:uppercase;
+  font-weight:800; margin:0 0 4px;
+}
+.welcome-name{
+  font-family: var(--ff-display); font-size:30px; color: var(--ink); text-transform:uppercase;
+  margin:0 0 20px; line-height:1.1;
+}
 
 /* ---------------- LOGIN ---------------- */
 #view-login{ display:flex; flex-direction:column; background:var(--ink); }
