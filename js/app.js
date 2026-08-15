@@ -262,6 +262,8 @@ formRegister.addEventListener('submit', e => {
     matchesWon: 0,
     setsWon: 0,
     gamesWon: 0,
+    joinedAt: Date.now(),
+    welcomeSeenAt: Date.now(),
   };
 
   saveUser(newUser).then(() => {
@@ -568,8 +570,45 @@ function enterApp(){
   segMatches.click();
   show('view-home');
   loadWeather();
+  maybeShowWelcome();
   maybeShowResultReminder();
+  runAutoDeleteCheck();
+  maybeShowDeleteWarning();
 }
+
+/* ===========================================================
+   BIENVENIDA A NUEVOS JUGADORES (una vez por usuario, para todos)
+=========================================================== */
+function findPendingWelcome(){
+  const user = currentUser();
+  if(!user) return null;
+  const cursor = user.welcomeSeenAt || 0;
+  const candidates = getUsers()
+    .filter(u => u.joinedAt && u.joinedAt > cursor && u.username !== user.username)
+    .sort((a, b) => a.joinedAt - b.joinedAt);
+  return candidates[0] || null;
+}
+
+function maybeShowWelcome(){
+  const modal = document.getElementById('welcome-modal');
+  const newPlayer = findPendingWelcome();
+  if(!newPlayer){ modal.classList.add('hidden'); return; }
+  document.getElementById('welcome-name').textContent = newPlayer.username;
+  modal.classList.remove('hidden');
+}
+
+function dismissWelcome(){
+  const user = currentUser();
+  const newPlayer = findPendingWelcome();
+  document.getElementById('welcome-modal').classList.add('hidden');
+  if(user && newPlayer){
+    saveUser({ ...user, welcomeSeenAt: newPlayer.joinedAt }).catch(() => {});
+  }
+  setTimeout(maybeShowWelcome, 300);
+}
+
+document.getElementById('btn-close-welcome').addEventListener('click', dismissWelcome);
+document.getElementById('btn-welcome-ok').addEventListener('click', dismissWelcome);
 
 /* ===========================================================
    AVISO DE RESULTADO PENDIENTE (6h tras la hora del partido)
@@ -611,6 +650,56 @@ function maybeShowResultReminder(){
 document.getElementById('btn-close-reminder').addEventListener('click', () => {
   document.getElementById('reminder-modal').classList.add('hidden');
 });
+
+/* ===========================================================
+   PARTIDO SIN COMPLETAR (6h tras la hora del partido)
+=========================================================== */
+const DELETE_WARNING_MS = 6 * 60 * 60 * 1000;
+
+function findPendingDeleteWarning(){
+  const user = currentUser();
+  if(!user) return null;
+  const now = Date.now();
+  const pending = getMatches()
+    .filter(m => m.status === 'open' && m.createdBy === user.username && !m.autoDeleteAt)
+    .filter(m => now - matchDateTimeMs(m) >= DELETE_WARNING_MS)
+    .sort((a, b) => matchDateTimeMs(a) - matchDateTimeMs(b));
+  return pending[0] || null;
+}
+
+function maybeShowDeleteWarning(){
+  const modal = document.getElementById('delete-warning-modal');
+  const match = findPendingDeleteWarning();
+  if(!match){ modal.classList.add('hidden'); return; }
+  const dateLabel = match.date ? formatISODate(match.date) : formatDate(match.createdAt);
+  document.getElementById('delete-warning-info').textContent = `Partido del ${dateLabel} a las ${match.hour} · ${match.players.length}/4 apuntados`;
+
+  document.getElementById('btn-delete-warning-yes').onclick = () => {
+    modal.classList.add('hidden');
+    window.db.collection(COL_MATCHES).doc(match.id).delete()
+      .then(() => toast('Partido borrado'))
+      .catch(err => toast('Error al borrar: ' + err.message));
+    setTimeout(maybeShowDeleteWarning, 400);
+  };
+
+  document.getElementById('btn-delete-warning-no').onclick = () => {
+    modal.classList.add('hidden');
+    updateMatch(match.id, m => { m.autoDeleteAt = Date.now() + DELETE_WARNING_MS; });
+    toast('Vale, tienes 6h más para completarlo — si sigue igual, se borrará solo.');
+    setTimeout(maybeShowDeleteWarning, 400);
+  };
+
+  modal.classList.remove('hidden');
+}
+
+function runAutoDeleteCheck(){
+  const now = Date.now();
+  getMatches()
+    .filter(m => m.status === 'open' && m.autoDeleteAt && now >= m.autoDeleteAt)
+    .forEach(m => {
+      window.db.collection(COL_MATCHES).doc(m.id).delete().catch(() => {});
+    });
+}
 
 /* ===========================================================
    TIEMPO EN LECIÑENA (Open-Meteo, sin clave)
