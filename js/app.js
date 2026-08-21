@@ -481,35 +481,111 @@ function renderHistoryList(filterUsername){
   });
 }
 
-function renderRanking(){
-  const users = getUsers().slice().sort((a,b) => {
-    if(b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
-    if(b.setsWon !== a.setsWon) return b.setsWon - a.setsWon;
-    return b.gamesWon - a.gamesWon;
+const RANKING_MIN_MATCHES = 3;
+
+function computeRankingStats(){
+  const stats = {};
+  getUsers().forEach(u => {
+    stats[u.username] = { username: u.username, matchesPlayed: 0, matchesWon: 0, setsWon: 0, setsPlayed: 0, gamesWon: 0, gamesPlayed: 0 };
   });
+  getMatches().filter(m => m.status === 'done' && m.result).forEach(m => {
+    const r = m.result;
+    const teamA = r.teamA || [m.players[0], m.players[1]];
+    const teamB = r.teamB || [m.players[2], m.players[3]];
+    const winners = r.setsA > r.setsB ? teamA : teamB;
+    const totalSets = r.setsA + r.setsB;
+    const totalGames = r.gamesA + r.gamesB;
+    [...teamA, ...teamB].forEach((username, i) => {
+      if(!stats[username]) stats[username] = { username, matchesPlayed: 0, matchesWon: 0, setsWon: 0, setsPlayed: 0, gamesWon: 0, gamesPlayed: 0 };
+      const s = stats[username];
+      const onTeamA = i < 2;
+      s.matchesPlayed++;
+      if(winners.includes(username)) s.matchesWon++;
+      s.setsWon += onTeamA ? r.setsA : r.setsB;
+      s.setsPlayed += totalSets;
+      s.gamesWon += onTeamA ? r.gamesA : r.gamesB;
+      s.gamesPlayed += totalGames;
+    });
+  });
+  return Object.values(stats);
+}
+
+function rankingRates(s){
+  return {
+    matchRate: s.matchesPlayed > 0 ? s.matchesWon / s.matchesPlayed : 0,
+    setRate: s.setsPlayed > 0 ? s.setsWon / s.setsPlayed : 0,
+    gameRate: s.gamesPlayed > 0 ? s.gamesWon / s.gamesPlayed : 0,
+  };
+}
+
+function sortRankingStats(list){
+  return list.slice().sort((a, b) => {
+    const ra = rankingRates(a), rb = rankingRates(b);
+    if(rb.matchRate !== ra.matchRate) return rb.matchRate - ra.matchRate;
+    if(rb.setRate !== ra.setRate) return rb.setRate - ra.setRate;
+    return rb.gameRate - ra.gameRate;
+  });
+}
+
+function pct(x){ return Math.round(x * 100) + '%'; }
+function medalFor(i){ return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1); }
+
+function renderRanking(){
+  document.getElementById('ranking-min-label').textContent = RANKING_MIN_MATCHES;
+  const allStats = computeRankingStats();
+  const qualified = sortRankingStats(allStats.filter(s => s.matchesPlayed >= RANKING_MIN_MATCHES));
+  const unqualified = allStats
+    .filter(s => s.matchesPlayed > 0 && s.matchesPlayed < RANKING_MIN_MATCHES)
+    .sort((a, b) => b.matchesPlayed - a.matchesPlayed);
+
   const table = document.getElementById('ranking-table');
   const empty = document.getElementById('ranking-empty');
   table.innerHTML = '';
 
-  const withGames = users.filter(u => u.matchesPlayed > 0);
-  if(withGames.length === 0){ empty.classList.remove('hidden'); }
+  if(qualified.length === 0 && unqualified.length === 0){ empty.classList.remove('hidden'); }
   else { empty.classList.add('hidden'); }
 
-  users.forEach((u, i) => {
+  qualified.forEach((s, i) => {
+    const u = findUser(s.username);
+    const rates = rankingRates(s);
     const row = document.createElement('div');
     row.className = 'rank-row';
     row.innerHTML = `
-      <span class="rank-pos">${i+1}</span>
-      <div class="avatar-sm" style="${avatarStyle(u)}">${u.photo ? '' : initials(u.username)}</div>
-      <span class="rank-name">${u.username}</span>
+      <span class="rank-pos">${medalFor(i)}</span>
+      <div class="avatar-sm" style="${avatarStyle(u)}">${u && u.photo ? '' : initials(s.username)}</div>
+      <div class="rank-name-wrap">
+        <span class="rank-name">${s.username}</span>
+        <span class="rank-sub">${s.matchesWon}/${s.matchesPlayed} partidos</span>
+      </div>
       <div class="rank-stats">
-        <span><b>${u.matchesWon}</b>PG</span>
-        <span><b>${u.setsWon}</b>Sets</span>
-        <span><b>${u.gamesWon}</b>Games</span>
+        <span><b>${pct(rates.matchRate)}</b>PG</span>
+        <span><b>${pct(rates.setRate)}</b>Sets</span>
+        <span><b>${pct(rates.gameRate)}</b>Games</span>
       </div>
     `;
     table.appendChild(row);
   });
+
+  if(unqualified.length > 0){
+    const divider = document.createElement('div');
+    divider.className = 'rank-divider';
+    divider.innerHTML = `<span>${RANKING_MIN_MATCHES} partidos mínimo</span>`;
+    table.appendChild(divider);
+    unqualified.forEach(s => {
+      const u = findUser(s.username);
+      const row = document.createElement('div');
+      row.className = 'rank-row rank-row-muted';
+      row.innerHTML = `
+        <span class="rank-pos">–</span>
+        <div class="avatar-sm" style="${avatarStyle(u)}">${u && u.photo ? '' : initials(s.username)}</div>
+        <div class="rank-name-wrap">
+          <span class="rank-name">${s.username}</span>
+          <span class="rank-sub">${s.matchesPlayed}/${RANKING_MIN_MATCHES} partidos jugados</span>
+        </div>
+      `;
+      table.appendChild(row);
+    });
+  }
 }
 
 function renderAdminPanel(){
@@ -574,7 +650,61 @@ function enterApp(){
   maybeShowResultReminder();
   runAutoDeleteCheck();
   maybeShowDeleteWarning();
+  maybeShowWeeklyTop3();
 }
+
+/* ===========================================================
+   PODIO SEMANAL (top 3 del ranking, una vez por semana)
+=========================================================== */
+function getISOWeekKey(d){
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+function maybeShowWeeklyTop3(){
+  const user = currentUser();
+  const modal = document.getElementById('weekly-top3-modal');
+  if(!user) return;
+  const currentWeek = getISOWeekKey(new Date());
+  if(user.weeklyRecapSeenWeek === currentWeek){ modal.classList.add('hidden'); return; }
+
+  const allStats = computeRankingStats();
+  const top3 = sortRankingStats(allStats.filter(s => s.matchesPlayed >= RANKING_MIN_MATCHES)).slice(0, 3);
+  if(top3.length === 0){ modal.classList.add('hidden'); return; }
+
+  const podium = document.getElementById('weekly-podium');
+  podium.innerHTML = '';
+  [1, 0, 2].forEach(rank => {
+    const s = top3[rank];
+    if(!s) return;
+    const barClass = rank === 0 ? 'bar-1' : rank === 1 ? 'bar-2' : 'bar-3';
+    podium.insertAdjacentHTML('beforeend', `
+      <div class="podium-item">
+        <span class="podium-medal">${medalFor(rank)}</span>
+        <div class="podium-bar ${barClass}"></div>
+        <span class="podium-name">${s.username}</span>
+        <span class="podium-pct">${pct(rankingRates(s).matchRate)}</span>
+      </div>
+    `);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+function dismissWeeklyTop3(){
+  const user = currentUser();
+  document.getElementById('weekly-top3-modal').classList.add('hidden');
+  if(user){
+    saveUser({ ...user, weeklyRecapSeenWeek: getISOWeekKey(new Date()) }).catch(() => {});
+  }
+}
+
+document.getElementById('btn-close-weekly').addEventListener('click', dismissWeeklyTop3);
+document.getElementById('btn-weekly-ok').addEventListener('click', dismissWeeklyTop3);
 
 /* ===========================================================
    BIENVENIDA A NUEVOS JUGADORES (una vez por usuario, para todos)
