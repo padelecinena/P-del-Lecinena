@@ -535,7 +535,7 @@ function renderRanking(){
   const allStats = computeRankingStats();
   const qualified = sortRankingStats(allStats.filter(s => s.matchesPlayed >= RANKING_MIN_MATCHES));
   const unqualified = allStats
-    .filter(s => s.matchesPlayed > 0 && s.matchesPlayed < RANKING_MIN_MATCHES)
+    .filter(s => s.matchesPlayed < RANKING_MIN_MATCHES)
     .sort((a, b) => b.matchesPlayed - a.matchesPlayed);
 
   const table = document.getElementById('ranking-table');
