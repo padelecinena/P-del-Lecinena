@@ -13,13 +13,17 @@
 
 const COL_USERS = 'usuarios';
 const COL_MATCHES = 'partidos';
+const COL_TOURNEYS = 'torneos';
 
 let usersCache = [];
 let matchesCache = [];
+let tourneysCache = [];
 let usersReady = false;
 let matchesReady = false;
+let tourneysReady = false;
 let activeMatchId = null;
 let resultEditorOpen = false;
+let activeTourneyId = null;
 
 /* ---------- arranque / estado de conexión ---------- */
 function showCloudStatus(html){
@@ -52,6 +56,12 @@ function startCloudSync(){
     matchesReady = true;
     onCloudData();
   }, err => connectionError(err));
+
+  window.db.collection(COL_TOURNEYS).onSnapshot(snap => {
+    tourneysCache = snap.docs.map(d => d.data());
+    tourneysReady = true;
+    onCloudData();
+  }, err => connectionError(err));
 }
 
 function connectionError(err){
@@ -64,7 +74,7 @@ function connectionError(err){
 
 let appStarted = false;
 function onCloudData(){
-  if(!usersReady || !matchesReady) return;
+  if(!usersReady || !matchesReady || !tourneysReady) return;
   if(!appStarted){
     appStarted = true;
     hideCloudStatus();
@@ -81,7 +91,8 @@ function refreshCurrentView(){
     renderHomeHeader();
     renderMatchesList();
     renderRecentResults();
-    if(!document.getElementById('panel-ranking').classList.contains('hidden')) renderRanking();
+    renderTourneyBanner();
+    if(!document.getElementById('panel-ranking').classList.contains('hidden')) renderRankingPanel();
     if(!document.getElementById('panel-admin').classList.contains('hidden')) renderAdminPanel();
   }
   if(!document.getElementById('view-match').classList.contains('hidden') && activeMatchId){
@@ -90,6 +101,9 @@ function refreshCurrentView(){
   if(!document.getElementById('view-history').classList.contains('hidden')){
     const sel = document.getElementById('history-filter');
     renderHistoryList(sel ? sel.value : '__all__');
+  }
+  if(!document.getElementById('view-tourney').classList.contains('hidden')){
+    renderTourneyView();
   }
 }
 
@@ -307,7 +321,7 @@ segMatches.addEventListener('click', () => {
 segRanking.addEventListener('click', () => {
   hideAllPanels();
   segRanking.classList.add('active'); panelRanking.classList.remove('hidden');
-  renderRanking();
+  renderRankingPanel();
 });
 segAdmin.addEventListener('click', () => {
   hideAllPanels();
@@ -507,6 +521,25 @@ function computeRankingStats(){
       s.gamesPlayed += totalGames;
     });
   });
+
+  // Los puntos de los partidos de torneo Mexicano suman como "juegos"
+  // en la clasificación general (no cuentan como partidos ni sets).
+  getTournaments().forEach(t => {
+    (t.rounds || []).forEach(round => {
+      (round.matches || []).forEach(m => {
+        if(m.status !== 'done') return;
+        const totalPts = m.pointsA + m.pointsB;
+        [...m.teamA, ...m.teamB].forEach((username, i) => {
+          if(!stats[username]) stats[username] = { username, matchesPlayed: 0, matchesWon: 0, setsWon: 0, setsPlayed: 0, gamesWon: 0, gamesPlayed: 0 };
+          const s = stats[username];
+          const onTeamA = i < 2;
+          s.gamesWon += onTeamA ? m.pointsA : m.pointsB;
+          s.gamesPlayed += totalPts;
+        });
+      });
+    });
+  });
+
   return Object.values(stats);
 }
 
@@ -529,6 +562,60 @@ function sortRankingStats(list){
 
 function pct(x){ return Math.round(x * 100) + '%'; }
 function medalFor(i){ return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1); }
+
+/* ---------- toggle Clasificación / Torneos dentro de Ranking ---------- */
+const rankViewGeneral = document.getElementById('rank-view-general');
+const rankViewTourneys = document.getElementById('rank-view-tourneys');
+const rankPanelGeneral = document.getElementById('rank-panel-general');
+const rankPanelTourneys = document.getElementById('rank-panel-tourneys');
+
+rankViewGeneral.addEventListener('click', () => {
+  rankViewGeneral.classList.add('active'); rankViewTourneys.classList.remove('active');
+  rankPanelGeneral.classList.remove('hidden'); rankPanelTourneys.classList.add('hidden');
+});
+rankViewTourneys.addEventListener('click', () => {
+  rankViewTourneys.classList.add('active'); rankViewGeneral.classList.remove('active');
+  rankPanelTourneys.classList.remove('hidden'); rankPanelGeneral.classList.add('hidden');
+  renderTournamentRanking();
+});
+
+function renderRankingPanel(){
+  renderRanking();
+  if(!rankPanelTourneys.classList.contains('hidden')) renderTournamentRanking();
+}
+
+function computeTournamentWins(){
+  const wins = {};
+  getUsers().forEach(u => { wins[u.username] = 0; });
+  getTournaments().filter(t => t.status === 'finalizado' && t.winner).forEach(t => {
+    wins[t.winner] = (wins[t.winner] || 0) + 1;
+  });
+  return Object.entries(wins)
+    .map(([username, count]) => ({ username, count }))
+    .filter(w => w.count > 0)
+    .sort((a, b) => b.count - a.count || a.username.localeCompare(b.username));
+}
+
+function renderTournamentRanking(){
+  const winners = computeTournamentWins();
+  const table = document.getElementById('tourney-ranking-table');
+  const empty = document.getElementById('tourney-ranking-empty');
+  table.innerHTML = '';
+  if(winners.length === 0){ empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  winners.forEach((w, i) => {
+    const u = findUser(w.username);
+    const row = document.createElement('div');
+    row.className = 'rank-row';
+    row.innerHTML = `
+      <span class="rank-pos">${medalFor(i)}</span>
+      <div class="avatar-sm" style="${avatarStyle(u)}">${u && u.photo ? '' : initials(w.username)}</div>
+      <div class="rank-name-wrap"><span class="rank-name">${w.username}</span></div>
+      <div class="rank-stats"><span><b>${w.count}</b>🏆</span></div>
+    `;
+    table.appendChild(row);
+  });
+}
 
 function renderRanking(){
   document.getElementById('ranking-min-label').textContent = RANKING_MIN_MATCHES;
@@ -595,6 +682,10 @@ function renderAdminPanel(){
   const users = getUsers().map(u => u.username).sort((a,b)=>a.localeCompare(b));
   select.innerHTML = users.map(u => `<option value="${u}">${u}</option>`).join('');
   if(users.includes(currentValue)) select.value = currentValue;
+
+  const active = findActiveTournament();
+  document.getElementById('tourney-create-card').classList.toggle('hidden', !!active);
+  document.getElementById('tourney-active-card').classList.toggle('hidden', !active);
 }
 
 document.getElementById('btn-admin-reset').addEventListener('click', () => {
@@ -1192,6 +1283,341 @@ document.getElementById('btn-save-result').addEventListener('click', () => {
   toast(isEdit ? 'Resultado corregido. ¡Ranking actualizado!' : 'Resultado guardado. ¡Ranking actualizado!');
   setTimeout(maybeShowResultReminder, 400);
 });
+
+/* ===========================================================
+   TORNEO MEXICANO
+=========================================================== */
+const MIN_TOURNEY_PLAYERS = 8;
+const TOURNEY_ROUNDS = 4;
+const TOURNEY_POINTS = 21;
+
+function getTournaments(){ return tourneysCache; }
+
+function findActiveTournament(){
+  return getTournaments()
+    .filter(t => t.status !== 'finalizado')
+    .sort((a, b) => b.createdAt - a.createdAt)[0] || null;
+}
+
+function findTournament(id){ return getTournaments().find(t => t.id === id); }
+
+function saveTournament(t){
+  return window.db.collection(COL_TOURNEYS).doc(t.id).set(t);
+}
+
+function updateTournament(id, mutator){
+  const t = findTournament(id);
+  if(!t) return;
+  const copy = JSON.parse(JSON.stringify(t));
+  mutator(copy);
+  saveTournament(copy).catch(err => toast('Error al guardar: ' + err.message));
+}
+
+/* ---------- algoritmo de emparejamiento ---------- */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function generateRound(t){
+  const players = t.signups.slice();
+  const restCounts = {};
+  players.forEach(p => { restCounts[p] = 0; });
+  (t.rounds || []).forEach(r => (r.resting || []).forEach(p => { restCounts[p] = (restCounts[p] || 0) + 1; }));
+
+  let order;
+  if((t.rounds || []).length === 0){
+    order = shuffle(players);
+  } else {
+    order = shuffle(players).sort((a, b) => (t.standings[b] || 0) - (t.standings[a] || 0));
+  }
+
+  const restNeeded = order.length % 4;
+  let resting = [];
+  if(restNeeded > 0){
+    const byLeastRested = order.slice().sort((a, b) => (restCounts[a] - restCounts[b]) || (order.indexOf(b) - order.indexOf(a)));
+    resting = byLeastRested.slice(0, restNeeded);
+  }
+  const active = order.filter(p => !resting.includes(p));
+
+  const matches = [];
+  for(let i = 0; i < active.length; i += 4){
+    const group = active.slice(i, i + 4);
+    matches.push({
+      id: uid(),
+      teamA: [group[0], group[3]],
+      teamB: [group[1], group[2]],
+      pointsA: null, pointsB: null, status: 'pending',
+    });
+  }
+  return { roundNumber: (t.rounds || []).length + 1, matches, resting };
+}
+
+/* ---------- banner en la pantalla principal ---------- */
+function renderTourneyBanner(){
+  const banner = document.getElementById('tourney-banner');
+  const t = findActiveTournament();
+  if(!t){ banner.classList.add('hidden'); return; }
+  banner.classList.remove('hidden');
+  const dateLabel = t.date ? formatISODate(t.date) : '';
+  document.getElementById('tourney-banner-title').textContent = t.name;
+  const user = currentUser();
+  const iAmIn = user && t.signups.includes(user.username);
+  if(t.status === 'inscripcion'){
+    document.getElementById('tourney-banner-sub').textContent =
+      `${dateLabel ? dateLabel + ' · ' : ''}${t.signups.length} apuntados${iAmIn ? ' · ¡ya estás dentro! ✓' : ''}`;
+  } else {
+    document.getElementById('tourney-banner-sub').textContent = `En juego · Ronda ${t.currentRound} de ${t.numRounds}`;
+  }
+}
+
+document.getElementById('btn-tourney-open').addEventListener('click', () => {
+  const t = findActiveTournament();
+  if(!t) return;
+  activeTourneyId = t.id;
+  show('view-tourney');
+});
+document.getElementById('btn-tourney-manage').addEventListener('click', () => {
+  const t = findActiveTournament();
+  if(!t) return;
+  activeTourneyId = t.id;
+  show('view-tourney');
+});
+document.getElementById('btn-back-tourney').addEventListener('click', () => {
+  activeTourneyId = null;
+  show('view-home');
+});
+
+/* ---------- crear torneo (máster) ---------- */
+document.getElementById('btn-create-tourney').addEventListener('click', () => {
+  if(!isMaster(currentUser())) return;
+  const errorEl = document.getElementById('tourney-create-error');
+  const name = document.getElementById('tourney-name').value.trim();
+  const date = document.getElementById('tourney-date').value;
+
+  if(findActiveTournament()){ errorEl.textContent = 'Ya hay un torneo en marcha.'; return; }
+  if(!name){ errorEl.textContent = 'Ponle un nombre al torneo.'; return; }
+  if(!date){ errorEl.textContent = 'Elige el día del torneo.'; return; }
+  errorEl.textContent = '';
+
+  const t = {
+    id: uid(),
+    name,
+    date,
+    numRounds: TOURNEY_ROUNDS,
+    pointsTarget: TOURNEY_POINTS,
+    status: 'inscripcion',
+    createdBy: currentUser().username,
+    createdAt: Date.now(),
+    signups: [],
+    currentRound: 0,
+    rounds: [],
+    standings: {},
+    winner: null,
+  };
+
+  saveTournament(t).then(() => {
+    toast('Torneo creado. ¡Ya se pueden apuntar!');
+    activeTourneyId = t.id;
+    show('view-tourney');
+  }).catch(err => toast('No se pudo crear el torneo: ' + err.message));
+});
+
+/* ---------- apuntarse / desapuntarse ---------- */
+document.getElementById('btn-tourney-signup').addEventListener('click', () => {
+  const t = findTournament(activeTourneyId);
+  const user = currentUser();
+  if(!t || !user) return;
+  updateTournament(t.id, tt => {
+    if(tt.signups.includes(user.username)){
+      tt.signups = tt.signups.filter(p => p !== user.username);
+    } else {
+      tt.signups.push(user.username);
+    }
+  });
+});
+
+/* ---------- iniciar torneo (máster) ---------- */
+document.getElementById('btn-tourney-start').addEventListener('click', () => {
+  const t = findTournament(activeTourneyId);
+  if(!t || !isMaster(currentUser())) return;
+  if(t.signups.length < 4){ toast('Hacen falta al menos 4 jugadores.'); return; }
+
+  updateTournament(t.id, tt => {
+    const standings = {};
+    tt.signups.forEach(p => { standings[p] = 0; });
+    tt.standings = standings;
+    tt.status = 'en_curso';
+    tt.currentRound = 1;
+    tt.rounds = [generateRound(tt)];
+  });
+  toast('¡Torneo en marcha! Ronda 1 generada.');
+});
+
+/* ---------- guardar el resultado de un partido de ronda ---------- */
+function saveTourneyMatchScore(tourneyId, matchId, pointsA, pointsB){
+  updateTournament(tourneyId, tt => {
+    const round = tt.rounds[tt.currentRound - 1];
+    const m = round.matches.find(mm => mm.id === matchId);
+    if(!m || m.status === 'done') return;
+    m.pointsA = pointsA;
+    m.pointsB = pointsB;
+    m.status = 'done';
+    [...m.teamA, ...m.teamB].forEach((username, i) => {
+      const onTeamA = i < 2;
+      tt.standings[username] = (tt.standings[username] || 0) + (onTeamA ? pointsA : pointsB);
+    });
+  });
+}
+
+/* ---------- avanzar de ronda / finalizar ---------- */
+document.getElementById('btn-tourney-next-round').addEventListener('click', () => {
+  const t = findTournament(activeTourneyId);
+  if(!t || !isMaster(currentUser())) return;
+  const round = t.rounds[t.currentRound - 1];
+  const allDone = round.matches.every(m => m.status === 'done');
+  if(!allDone){ toast('Faltan partidos de esta ronda por completar.'); return; }
+
+  if(t.currentRound >= t.numRounds){
+    updateTournament(t.id, tt => {
+      tt.status = 'finalizado';
+      let winner = null, best = -1;
+      Object.entries(tt.standings).forEach(([username, pts]) => {
+        if(pts > best){ best = pts; winner = username; }
+      });
+      tt.winner = winner;
+    });
+    toast('🏆 ¡Torneo terminado!');
+  } else {
+    updateTournament(t.id, tt => {
+      tt.currentRound += 1;
+      tt.rounds.push(generateRound(tt));
+    });
+    toast(`Ronda ${t.currentRound + 1} generada`);
+  }
+});
+
+/* ---------- render de la vista del torneo ---------- */
+function renderTourneyView(){
+  const t = findTournament(activeTourneyId);
+  const signupView = document.getElementById('tourney-signup-view');
+  const liveView = document.getElementById('tourney-live-view');
+  const doneView = document.getElementById('tourney-done-view');
+  signupView.classList.add('hidden');
+  liveView.classList.add('hidden');
+  doneView.classList.add('hidden');
+
+  if(!t){ show('view-home'); return; }
+  const user = currentUser();
+  const master = isMaster(user);
+
+  if(t.status === 'inscripcion'){
+    signupView.classList.remove('hidden');
+    document.getElementById('tourney-signup-title').textContent = t.name;
+    document.getElementById('tourney-signup-date').textContent = t.date ? `Día del torneo: ${formatISODate(t.date)}` : '';
+    document.getElementById('tourney-signup-count').textContent = `${t.signups.length} apuntados (mínimo recomendado: ${MIN_TOURNEY_PLAYERS})`;
+
+    const list = document.getElementById('tourney-signup-list');
+    list.innerHTML = t.signups.length === 0
+      ? '<p class="empty-state">Nadie apuntado todavía. ¡Sé el primero!</p>'
+      : t.signups.map(username => {
+          const u = findUser(username);
+          return `<div class="signup-row"><div class="avatar-sm" style="${avatarStyle(u)}">${u && u.photo ? '' : initials(username)}</div>${username}</div>`;
+        }).join('');
+
+    const iAmIn = user && t.signups.includes(user.username);
+    const signupBtn = document.getElementById('btn-tourney-signup');
+    signupBtn.textContent = iAmIn ? 'Quitarme de la lista' : 'Apuntarme';
+    signupBtn.className = iAmIn ? 'btn btn-outline btn-block' : 'btn btn-accent btn-block';
+
+    const startBtn = document.getElementById('btn-tourney-start');
+    const startHint = document.getElementById('tourney-start-hint');
+    startBtn.classList.toggle('hidden', !master);
+    if(master){
+      startHint.textContent = t.signups.length < MIN_TOURNEY_PLAYERS
+        ? `Se puede iniciar, aunque lo ideal son ${MIN_TOURNEY_PLAYERS}+ jugadores para que las rondas cuadren bien.`
+        : '';
+    }
+  } else if(t.status === 'en_curso'){
+    liveView.classList.remove('hidden');
+    document.getElementById('tourney-live-title').textContent = t.name;
+    document.getElementById('tourney-round-badge').textContent = `Ronda ${t.currentRound} de ${t.numRounds}`;
+
+    const round = t.rounds[t.currentRound - 1];
+    const queue = document.getElementById('tourney-queue');
+    queue.innerHTML = '';
+
+    round.matches.forEach((m, idx) => {
+      const item = document.createElement('div');
+      const isNextPending = m.status === 'pending' && round.matches.slice(0, idx).every(mm => mm.status === 'done');
+      item.className = 'queue-item' + (isNextPending ? ' active' : '');
+      const label = m.status === 'done' ? `Partido ${idx + 1} de ${round.matches.length} · jugado` : `Partido ${idx + 1} de ${round.matches.length}${isNextPending ? ' · en pista ahora' : ' · en espera'}`;
+
+      if(m.status === 'done'){
+        item.innerHTML = `
+          <div class="queue-label">${label}</div>
+          <div class="queue-match"><span>${m.teamA.join(' + ')}</span><span class="queue-vs">VS</span><span>${m.teamB.join(' + ')}</span></div>
+          <div class="queue-final-score">${m.pointsA} – ${m.pointsB}</div>
+        `;
+      } else {
+        item.innerHTML = `
+          <div class="queue-label">${label}</div>
+          <div class="queue-match"><span>${m.teamA.join(' + ')}</span><span class="queue-vs">VS</span><span>${m.teamB.join(' + ')}</span></div>
+          ${master ? `
+            <div class="queue-score-row">
+              <input type="number" min="0" placeholder="Tantos" id="qs-a-${m.id}">
+              <span style="font-weight:800;">–</span>
+              <input type="number" min="0" placeholder="Tantos" id="qs-b-${m.id}">
+            </div>
+            <button class="btn btn-primary btn-block" data-save-match="${m.id}">Guardar y pasar al siguiente</button>
+          ` : `<p class="result-hint" style="margin:0;">Esperando resultado…</p>`}
+        `;
+      }
+      queue.appendChild(item);
+    });
+
+    if(round.resting && round.resting.length > 0){
+      const restItem = document.createElement('div');
+      restItem.className = 'queue-item resting';
+      restItem.innerHTML = `<div class="queue-label">Descansan esta ronda</div><div class="queue-match"><span>${round.resting.join(', ')}</span></div>`;
+      queue.appendChild(restItem);
+    }
+
+    queue.querySelectorAll('[data-save-match]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mid = btn.dataset.saveMatch;
+        const pa = parseInt(document.getElementById(`qs-a-${mid}`).value);
+        const pb = parseInt(document.getElementById(`qs-b-${mid}`).value);
+        if(isNaN(pa) || isNaN(pb)){ toast('Pon los tantos de los dos equipos.'); return; }
+        if(pa === pb){ toast('No puede quedar empate.'); return; }
+        saveTourneyMatchScore(t.id, mid, pa, pb);
+      });
+    });
+
+    const allDone = round.matches.every(m => m.status === 'done');
+    const nextBtn = document.getElementById('btn-tourney-next-round');
+    nextBtn.classList.toggle('hidden', !(master && allDone));
+    nextBtn.textContent = t.currentRound >= t.numRounds ? '🏁 Finalizar torneo' : `Avanzar a la ronda ${t.currentRound + 1}`;
+
+    const standings = document.getElementById('tourney-standings');
+    const ranked = Object.entries(t.standings).sort((a, b) => b[1] - a[1]);
+    standings.innerHTML = ranked.map(([username, pts], i) => `
+      <div class="standing-row"><span class="standing-pos">${i + 1}</span>${username}<span class="standing-pts">${pts} pts</span></div>
+    `).join('');
+  } else if(t.status === 'finalizado'){
+    doneView.classList.remove('hidden');
+    document.getElementById('tourney-done-sub').textContent = `${t.name} · ganador: ${t.winner}`;
+    const standings = document.getElementById('tourney-final-standings');
+    const ranked = Object.entries(t.standings).sort((a, b) => b[1] - a[1]);
+    standings.innerHTML = ranked.map(([username, pts], i) => `
+      <div class="standing-row"><span class="standing-pos">${medalFor(i)}</span>${username}<span class="standing-pts">${pts} pts</span></div>
+    `).join('');
+  }
+}
 
 /* ===========================================================
    ARRANQUE
