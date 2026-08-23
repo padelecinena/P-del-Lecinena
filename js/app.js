@@ -1058,12 +1058,26 @@ function renderMatch(){
           ${canLeave ? `<button class="btn-leave" data-leave-idx="${i}">Salir</button>` : ''}
         </div>`;
     }
-    const canJoin = match.status === 'open' && !match.players.includes(user.username);
+
+    const iAmIn = match.players.includes(user.username);
+    const otherUsers = getUsers()
+      .map(u2 => u2.username)
+      .filter(username2 => !match.players.includes(username2) && username2 !== user.username)
+      .sort((a, b) => a.localeCompare(b));
+
+    const options = [];
+    if(!iAmIn) options.push(`<option value="__self__">Apuntarme (tú)</option>`);
+    otherUsers.forEach(username2 => options.push(`<option value="${username2}">Reservar: ${username2}</option>`));
+
+    const canAct = match.status === 'open' && options.length > 0;
     return `
       <div class="slot-card">
         <div class="slot-avatar">?</div>
         <span class="slot-empty-label">Libre</span>
-        ${canJoin ? `<button class="btn-join" data-join-idx="${i}">Apuntarme</button>` : ''}
+        ${canAct ? `
+          <select class="slot-select" id="slot-select-${i}">${options.join('')}</select>
+          <button class="btn-join" data-join-idx="${i}">Apuntar</button>
+        ` : ''}
       </div>`;
   }
 
@@ -1081,7 +1095,16 @@ function renderMatch(){
     </div>
   `;
   grid.querySelectorAll('[data-join-idx]').forEach(btn => {
-    btn.addEventListener('click', () => joinMatch(match.id));
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.joinIdx;
+      const select = document.getElementById(`slot-select-${idx}`);
+      const value = select ? select.value : '__self__';
+      if(value === '__self__'){
+        joinMatch(match.id);
+      } else {
+        reserveSlot(match.id, value);
+      }
+    });
   });
   grid.querySelectorAll('[data-leave-idx]').forEach(btn => {
     btn.addEventListener('click', () => leaveMatch(match.id));
@@ -1226,6 +1249,15 @@ function joinMatch(id){
     if(m.players.length === 4) m.status = 'full';
   });
   toast('¡Te has apuntado!');
+}
+
+function reserveSlot(id, username){
+  updateMatch(id, m => {
+    if(m.players.includes(username) || m.players.length >= 4) return;
+    m.players.push(username);
+    if(m.players.length === 4) m.status = 'full';
+  });
+  toast(`${username} apuntado al partido`);
 }
 
 function leaveMatch(id){
