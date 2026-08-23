@@ -469,6 +469,10 @@ body::before{
 }
 .slot-name{ font-weight:700; font-size:13px; }
 .slot-empty-label{ font-size:12px; color: var(--ink-soft); opacity:0.55; }
+.slot-select{
+  width:100%; max-width:130px; border:1.5px solid var(--line); border-radius: var(--radius-sm);
+  padding:6px 6px; font-size:11px; background:#fff; color: var(--ink);
+}
 .btn-join{
   background: var(--ball); color: var(--ink); border:none; border-radius:999px;
   padding:7px 16px; font-weight:800; font-size:12px; cursor:pointer;
